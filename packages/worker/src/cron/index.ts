@@ -1,5 +1,7 @@
 import { WorkerEnv } from "../types";
+import { processExportJobs } from "./export-cron";
 
 export async function handleCron(env: WorkerEnv) {
-  return;
+  // Process pending export jobs
+  await processExportJobs(env);
 }

@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { DashboardHeader } from "@/custom-components/header";
 import { DashboardShell } from "@/custom-components/shell";
+import { ReceiptExport } from "@/custom-components/receipt-export";
 import { getOrgUserForOrgName } from "@/lib/org";
 import { getCurrentServerUser } from "@/lib/session";
 import { cookies } from "next/headers";
@@ -26,14 +27,15 @@ export default async function DashboardPage({
     notFound();
   }
 
-  // TODO: everything!
   return (
     <DashboardShell>
       <DashboardHeader
         heading="Organization Dashboard"
-        text="Dashboard for organization."
+        text="Manage your receipts and export data."
       />
-      <div>Add dashboard stuff here!</div>
+      <div className="grid gap-8">
+        <ReceiptExport orgName={params.name} />
+      </div>
     </DashboardShell>
   );
 }

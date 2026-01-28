@@ -455,6 +455,109 @@ export const syncedReceipts = sqliteTable(
 );
 
 // ============================================================================
+// Export Jobs Table
+// ============================================================================
+
+/**
+ * Export job status - tracks async export progress
+ */
+export enum ExportJobStatus {
+  Pending = "PENDING",
+  Processing = "PROCESSING",
+  Completed = "COMPLETED",
+  Failed = "FAILED",
+  Expired = "EXPIRED",
+}
+
+/**
+ * Export format types
+ */
+export enum ExportFormat {
+  Csv = "CSV",
+  Excel = "XLSX",
+}
+
+/**
+ * Export job configuration stored as JSON
+ */
+export interface ExportJobConfiguration {
+  columns: string[];
+  filters?: {
+    startDate?: string;
+    endDate?: string;
+    categories?: string[];
+    statuses?: string[];
+    vendors?: string[];
+  };
+  includeImages: boolean;
+}
+
+/**
+ * Export jobs - tracks async export requests
+ */
+export const exportJobs = sqliteTable(
+  "export_jobs",
+  {
+    id: text("id", { length: 191 }).primaryKey().notNull(),
+    orgId: text("org_id", { length: 191 }).notNull(),
+    userId: text("user_id", { length: 191 }).notNull(),
+    format: text("format", {
+      enum: [ExportFormat.Csv, ExportFormat.Excel],
+    })
+      .notNull()
+      .$type<ExportFormat>(),
+    status: text("status", {
+      enum: [
+        ExportJobStatus.Pending,
+        ExportJobStatus.Processing,
+        ExportJobStatus.Completed,
+        ExportJobStatus.Failed,
+        ExportJobStatus.Expired,
+      ],
+    })
+      .default(ExportJobStatus.Pending)
+      .notNull()
+      .$type<ExportJobStatus>(),
+    // Configuration for the export
+    configuration: text("configuration", { mode: "json" })
+      .notNull()
+      .$type<ExportJobConfiguration>(),
+    // Count of receipts being exported
+    receiptCount: integer("receipt_count"),
+    // Download URL once completed (can be R2, S3, or other storage)
+    downloadUrl: text("download_url", { length: 2048 }),
+    // When the download link expires
+    expiresAt: integer("expires_at", { mode: "timestamp" }),
+    // Error message if failed
+    error: text("error", { length: 2048 }),
+    // User's email for notification
+    notificationEmail: text("notification_email", { length: 191 }),
+    // Whether email notification was sent
+    emailSent: integer("email_sent", { mode: "boolean" }).default(false),
+    // Timestamps
+    completedAt: integer("completed_at", { mode: "timestamp" }),
+    createdAt: integer("created_at", {
+      mode: "timestamp",
+    })
+      .default(sql`(unixepoch())`)
+      .notNull(),
+    updatedAt: integer("updated_at", {
+      mode: "timestamp",
+    })
+      .default(sql`(unixepoch())`)
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => {
+    return {
+      orgIdIndex: index("export_jobs_org_id_idx").on(table.orgId),
+      userIdIndex: index("export_jobs_user_id_idx").on(table.userId),
+      statusIndex: index("export_jobs_status_idx").on(table.status),
+    };
+  }
+);
+
+// ============================================================================
 // Type Exports
 // ============================================================================
 
@@ -473,3 +576,7 @@ export type Destination = InferSelectModel<typeof destinations>;
 export type InsertDestination = InferInsertModel<typeof destinations>;
 export type SyncedReceipt = InferSelectModel<typeof syncedReceipts>;
 export type InsertSyncedReceipt = InferInsertModel<typeof syncedReceipts>;
+
+// Export job types
+export type ExportJob = InferSelectModel<typeof exportJobs>;
+export type InsertExportJob = InferInsertModel<typeof exportJobs>;

@@ -27,6 +27,7 @@
     "components": "*",
     "date-fns": "^2.30.0",
     "drizzle-orm": "^0.30.8",
+    "exceljs": "^4.4.0",
     "firebase": "^9.23.0",
     "jiti": "^1.21.6",
     "jose": "^6.1.0",
