@@ -42,6 +42,9 @@ async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
   }
 
   const isRenewal = invoice.billing_reason === "subscription_cycle";
+  const priceId = subscription.items.data[0].price.id;
+  const periodStart = new Date(subscription.current_period_start * 1000);
+  const periodEnd = new Date(subscription.current_period_end * 1000);
 
   if (orgId) {
     if (!isRenewal) {
@@ -50,68 +53,73 @@ async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
       });
     }
 
-    const newPlan = stripePriceIdToPlan(
-      subscription.items.data[0].price.id,
-      env
-    );
+    const newPlan = stripePriceIdToPlan(priceId, env);
     if (!newPlan) {
       console.error(
         "No matching plan for Stripe Price Id: ",
-        subscription.items.data[0].price.id
+        priceId
       );
-      throw new Error("No ID for subscription given");
+      throw new Error("No matching plan for Stripe Price Id");
     }
 
     if (isRenewal) {
+      // On renewal, reset the usage counter and update billing period
+      await db()
+        .update(orgs)
+        .set({
+          stripeCurrentPeriodEnd: periodEnd,
+          billingPeriodStart: periodStart,
+          billingPeriodEnd: periodEnd,
+          receiptsUsedThisPeriod: 0, // Reset usage on renewal
+        })
+        .where(eq(orgs.id, orgId));
+
       track(EventNames.ORG_SUBSCRIPTION_RENEWED, orgId, {
         "org id": orgId,
         "stripe customer id": subscription.customer as string,
         "subscription id": subscription.id,
-        "subscription period end": new Date(
-          subscription.current_period_end * 1000
-        ).toISOString(),
-        "price id": subscription.items.data[0].price.id,
+        "subscription period end": periodEnd.toISOString(),
+        "price id": priceId,
         plan: newPlan,
       });
 
-      // Nothing to do on org renews since plan value is already written to DB
       return;
     }
 
+    // Initial subscription or plan change
     await db()
       .update(orgs)
       .set({
         plan: newPlan,
         stripeCustomerId: subscription.customer as string,
+        stripeSubscriptionId: subscription.id,
+        stripePriceId: priceId,
+        stripeCurrentPeriodEnd: periodEnd,
+        billingPeriodStart: periodStart,
+        billingPeriodEnd: periodEnd,
+        receiptsUsedThisPeriod: 0, // Reset usage on new subscription
       })
       .where(eq(orgs.id, orgId));
 
-    // TODO: get actual user id
     track(EventNames.ORG_UPGRADED, orgId, {
       "org id": orgId,
       "stripe customer id": subscription.customer as string,
       "subscription id": subscription.id,
-      "subscription period end": new Date(
-        subscription.current_period_end * 1000
-      ).toISOString(),
-      "price id": subscription.items.data[0].price.id,
+      "subscription period end": periodEnd.toISOString(),
+      "price id": priceId,
       plan: newPlan,
     });
   }
 
   if (userId) {
-    // Update the user stripe into in our database.
-    // Since this is the initial subscription, we need to update
-    // the subscription id and customer id.
+    // Update the user stripe info in our database.
     await db()
       .update(users)
       .set({
         stripeSubscriptionId: subscription.id,
         stripeCustomerId: subscription.customer as string,
-        stripePriceId: subscription.items.data[0].price.id,
-        stripeCurrentPeriodEnd: new Date(
-          subscription.current_period_end * 1000
-        ),
+        stripePriceId: priceId,
+        stripeCurrentPeriodEnd: periodEnd,
       })
       .where(eq(users.id, userId));
 
@@ -122,10 +130,8 @@ async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
     track(eventType, userId, {
       "stripe customer id": subscription.customer as string,
       "subscription id": subscription.id,
-      "subscription period end": new Date(
-        subscription.current_period_end * 1000
-      ).toISOString(),
-      "price id": subscription.items.data[0].price.id,
+      "subscription period end": periodEnd.toISOString(),
+      "price id": priceId,
     });
   }
 }
@@ -133,6 +139,8 @@ async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
 async function handleCustomerSubscriptionDeleted(event: Stripe.Event) {
   const subscription = event.data.object as Stripe.Subscription;
   const orgId = subscription.metadata.org_id;
+  const priceId = subscription.items.data[0].price.id;
+
   if (!orgId) {
     if (!!subscription.metadata.user_id) {
       // If user_id is set, and orgId is not, then this must be an individual subscription
@@ -145,7 +153,7 @@ async function handleCustomerSubscriptionDeleted(event: Stripe.Event) {
         "subscription period end": new Date(
           subscription.current_period_end * 1000
         ).toISOString(),
-        "price id": subscription.items.data[0].price.id,
+        "price id": priceId,
       });
 
       return;
@@ -154,29 +162,36 @@ async function handleCustomerSubscriptionDeleted(event: Stripe.Event) {
     throw new Error("Subscription for deleted event had no Org Id");
   }
 
-  // TODO when needed: query for different plan type when there are more than 2
+  // Get the previous plan from the price ID
+  const previousPlan = stripePriceIdToPlan(priceId, env) || Plan.PRO;
   const downGradedPlan = Plan.FREE;
 
   await db()
     .update(orgs)
     .set({
       plan: downGradedPlan,
+      stripeSubscriptionId: null,
+      stripePriceId: null,
+      stripeCurrentPeriodEnd: null,
+      billingPeriodStart: null,
+      billingPeriodEnd: null,
+      // Note: We don't reset receiptsUsedThisPeriod - it will be reset on next subscription
     })
     .where(eq(orgs.id, orgId));
 
   track(EventNames.ORG_DOWNGRADED, orgId, {
     "org id": orgId,
-    "previous plan": Plan.PAID, // TODO: if there are more than 2 plan types, query for this
+    "previous plan": previousPlan,
     "new plan": downGradedPlan,
     "stripe customer id": subscription.customer as string,
     "subscription id": subscription.id,
     "subscription period end": new Date(
       subscription.current_period_end * 1000
     ).toISOString(),
-    "price id": subscription.items.data[0].price.id,
+    "price id": priceId,
   });
 
-  // TODO: send a downgrade email
+  // Send downgrade email to admins
   const allAdminUserRecords = await db()
     .select({ id: orgUsers.id })
     .from(orgUsers)
@@ -196,7 +211,7 @@ async function handleCustomerSubscriptionDeleted(event: Stripe.Event) {
         from: env.SMTP_FROM,
         subject: `[${siteConfig.name}] ${orgName} organization has been downgraded`,
         html: `<p>Hello,</p>
-<p>The organization, ${orgName}, on ${siteConfig.name}, has been downgraded to the ${downGradedPlan} plan due to it's subscription ending.</p>
+<p>The organization, ${orgName}, on ${siteConfig.name}, has been downgraded to the ${downGradedPlan} plan due to its subscription ending.</p>
 <p>If you'd like to review billing details or subscribe again, you can <a href='${env.NEXT_PUBLIC_APP_URL}/${orgName}/billing'>view billing here</a>.</p>
 <p>You are receiving this email because you are an Admin member of this organization.</p>
 <p>Thanks & we hope you'll consider upgrading again,</p>

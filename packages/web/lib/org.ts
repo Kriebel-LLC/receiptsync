@@ -174,6 +174,12 @@ export async function getOrgsForUser(userId: string): Promise<Org[]> {
       name: orgs.name,
       plan: orgs.plan,
       stripeCustomerId: orgs.stripeCustomerId,
+      stripeSubscriptionId: orgs.stripeSubscriptionId,
+      stripePriceId: orgs.stripePriceId,
+      stripeCurrentPeriodEnd: orgs.stripeCurrentPeriodEnd,
+      billingPeriodStart: orgs.billingPeriodStart,
+      billingPeriodEnd: orgs.billingPeriodEnd,
+      receiptsUsedThisPeriod: orgs.receiptsUsedThisPeriod,
       createdAt: orgs.createdAt,
       updatedAt: orgs.updatedAt,
     })
