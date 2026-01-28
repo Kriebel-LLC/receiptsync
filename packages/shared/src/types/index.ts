@@ -35,3 +35,8 @@ export type UserDetail = {
   displayName?: string;
   photoUrl?: string;
 };
+
+// ReceiptSync type exports
+export * from "./destination-type";
+export * from "./destination";
+export * from "./receipt";
