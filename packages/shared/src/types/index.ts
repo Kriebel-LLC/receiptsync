@@ -24,6 +24,11 @@ export interface Env {
   AWS_ACCESS_KEY_ID: string;
   AWS_SECRET_ACCESS_KEY: string;
   NEXT_PUBLIC_ENVIRONMENT: Environment;
+  // Google OAuth
+  NEXT_PUBLIC_GOOGLE_CLIENT_ID: string;
+  GOOGLE_CLIENT_SECRET: string;
+  // Encryption for storing OAuth tokens
+  ENCRYPTION_SECRET_KEY: string;
 }
 
 export interface DBEnv {
@@ -41,3 +46,4 @@ export type UserDetail = {
 export * from "./destination-type";
 export * from "./destination";
 export * from "./receipt";
+export * from "./connection";

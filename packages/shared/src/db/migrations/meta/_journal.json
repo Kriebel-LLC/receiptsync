@@ -26,15 +26,22 @@
     {
       "idx": 3,
       "version": "5",
-      "when": 1738076400000,
-      "tag": "0003_add_billing_fields_to_orgs",
+      "when": 1769900000000,
+      "tag": "0003_email_forwarding_addresses",
       "breakpoints": true
     },
     {
       "idx": 4,
       "version": "5",
-      "when": 1769909604500,
-      "tag": "0004_mysterious_gateway",
+      "when": 1769910370941,
+      "tag": "0004_connections",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1769910465637,
+      "tag": "0005_flashy_earthquake",
       "breakpoints": true
     }
   ]

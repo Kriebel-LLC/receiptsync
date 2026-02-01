@@ -26,6 +26,10 @@ export const env = createEnv({
     R2_BUCKET_NAME: z.string().min(1),
     R2_PUBLIC_URL: z.string().url().optional(),
     NEXT_PUBLIC_ENVIRONMENT: z.nativeEnum(Environment),
+    // Google OAuth
+    NEXT_PUBLIC_GOOGLE_CLIENT_ID: z.string().min(1),
+    GOOGLE_CLIENT_SECRET: z.string().min(1),
+    ENCRYPTION_SECRET_KEY: z.string().min(1),
   },
   client: {
     NEXT_PUBLIC_APP_URL: z.string().min(1),
@@ -38,6 +42,7 @@ export const env = createEnv({
     NEXT_PUBLIC_AXIOM_DATASET: z.string().min(1),
     NEXT_PUBLIC_AXIOM_TOKEN: z.string().min(1),
     NEXT_PUBLIC_ENVIRONMENT: z.nativeEnum(Environment),
+    NEXT_PUBLIC_GOOGLE_CLIENT_ID: z.string().min(1),
   },
   runtimeEnv: {
     STRIPE_API_KEY: process.env.STRIPE_API_KEY,
@@ -69,5 +74,9 @@ export const env = createEnv({
     R2_BUCKET_NAME: process.env.R2_BUCKET_NAME,
     R2_PUBLIC_URL: process.env.R2_PUBLIC_URL,
     NEXT_PUBLIC_ENVIRONMENT: process.env.NEXT_PUBLIC_ENVIRONMENT,
+    // Google OAuth
+    NEXT_PUBLIC_GOOGLE_CLIENT_ID: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
+    ENCRYPTION_SECRET_KEY: process.env.ENCRYPTION_SECRET_KEY,
   },
 });
