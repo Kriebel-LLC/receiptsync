@@ -50,17 +50,33 @@ export type DashboardConfig = {
   sidebarNav: SidebarNavItem[];
 };
 
+import { Plan, PlanLimits } from "shared/src/types/plan";
+
 export type SubscriptionPlan = {
   name: string;
   description: string;
   stripePriceId: string;
+  price: number;
+  features: string[];
+  limits: PlanLimits;
 };
 
 export type UserSubscriptionPlan = SubscriptionPlan &
   Pick<User, "stripeCustomerId" | "stripeSubscriptionId"> & {
     stripeCurrentPeriodEnd: number;
     isPro: boolean;
+    plan: Plan;
   };
+
+export type OrgSubscriptionPlan = SubscriptionPlan & {
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  stripeCurrentPeriodEnd: number | null;
+  plan: Plan;
+  receiptsUsedThisPeriod: number;
+  billingPeriodStart: Date | null;
+  billingPeriodEnd: Date | null;
+};
 
 export type UserDetail = {
   userId: string;
