@@ -305,6 +305,7 @@ export const receipts = sqliteTable(
     // Image/file storage
     originalImageUrl: text("original_image_url", { length: 2048 }),
     processedImageUrl: text("processed_image_url", { length: 2048 }),
+    imageHash: text("image_hash", { length: 64 }), // SHA-256 hash for deduplication
 
     // Extraction metadata
     confidenceScore: real("confidence_score"), // 0.0 to 1.0 extraction confidence
@@ -333,6 +334,7 @@ export const receipts = sqliteTable(
       statusIndex: index("receipts_status_idx").on(table.status),
       dateIndex: index("receipts_date_idx").on(table.date),
       createdAtIndex: index("receipts_created_at_idx").on(table.createdAt),
+      imageHashIndex: index("receipts_image_hash_idx").on(table.imageHash),
     };
   }
 );

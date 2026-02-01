@@ -5,10 +5,12 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
+    include: ["src/**/*.test.ts"],
   },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./"),
+      shared: path.resolve(__dirname, "../shared"),
     },
   },
 });

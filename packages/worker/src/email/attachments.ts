@@ -68,7 +68,9 @@ export async function extractAttachments(
     }
 
     attachments.push({
-      filename: part.filename || `attachment-${Date.now()}.${getExtension(part.contentType)}`,
+      filename:
+        part.filename ||
+        `attachment-${Date.now()}.${getExtension(part.contentType)}`,
       mimeType: part.contentType,
       content: part.content,
       size: part.content.byteLength,
@@ -171,7 +173,9 @@ function parseMimeSection(section: string): MimePart | null {
   }
 
   // Extract Content-Transfer-Encoding
-  const encodingMatch = headers.match(/Content-Transfer-Encoding:\s*([^\r\n]+)/i);
+  const encodingMatch = headers.match(
+    /Content-Transfer-Encoding:\s*([^\r\n]+)/i
+  );
   const encoding = encodingMatch?.[1].trim().toLowerCase() || "7bit";
 
   // Decode the body based on encoding
@@ -183,7 +187,10 @@ function parseMimeSection(section: string): MimePart | null {
   } else {
     // 7bit or 8bit - treat as plain text
     const encoded = new TextEncoder().encode(body);
-    content = encoded.buffer.slice(encoded.byteOffset, encoded.byteOffset + encoded.byteLength) as ArrayBuffer;
+    content = encoded.buffer.slice(
+      encoded.byteOffset,
+      encoded.byteOffset + encoded.byteLength
+    ) as ArrayBuffer;
   }
 
   return {
@@ -213,8 +220,10 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
   for (let i = 0; i < binaryString.length; i++) {
     bytes[i] = binaryString.charCodeAt(i);
   }
-  // Ensure we return an ArrayBuffer, not ArrayBufferLike
-  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  // Create a new ArrayBuffer to avoid SharedArrayBuffer type issues
+  const buffer = new ArrayBuffer(bytes.length);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
 }
 
 /**
@@ -229,13 +238,18 @@ function quotedPrintableToArrayBuffer(qp: string): ArrayBuffer {
     );
 
   const encoded = new TextEncoder().encode(decoded);
-  return encoded.buffer.slice(encoded.byteOffset, encoded.byteOffset + encoded.byteLength) as ArrayBuffer;
+  return encoded.buffer.slice(
+    encoded.byteOffset,
+    encoded.byteOffset + encoded.byteLength
+  ) as ArrayBuffer;
 }
 
 /**
  * Convert ReadableStream to text
  */
-async function streamToText(stream: ReadableStream<Uint8Array>): Promise<string> {
+async function streamToText(
+  stream: ReadableStream<Uint8Array>
+): Promise<string> {
   const reader = stream.getReader();
   const chunks: Uint8Array[] = [];
 

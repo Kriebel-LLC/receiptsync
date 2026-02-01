@@ -14,7 +14,7 @@ export type QueueMessage =
   | SyncReceiptQueueMessage;
 
 export type DefaultQueueMessage = {
-  type: QueueMessageType.Default;
+  type: typeof QueueMessageType.Default;
   foo: string;
 };
 

@@ -1,13 +1,18 @@
-import { Router } from "itty-router";
+import { Router, IRequest } from "itty-router";
 import { handleCron } from "./cron";
 import { QueueMessage, handleQueueMessage } from "./queue";
 import { WorkerEnv } from "./types";
 import { handleEmail } from "./email";
 import { getFromR2 } from "./email/storage";
+import {
+  handleExtractReceipt,
+  handleExtractReceiptDirect,
+} from "./api/extract";
 
 const router = Router();
 
-router.get("/api/test", (request, env) => {
+// Health check / test endpoint
+router.get("/api/test", () => {
   return new Response("test");
 });
 
@@ -24,12 +29,25 @@ router.get("/api/receipts/images/:key", async (request, env: WorkerEnv) => {
   }
 
   const headers = new Headers();
-  headers.set("Content-Type", object.httpMetadata?.contentType || "application/octet-stream");
+  headers.set(
+    "Content-Type",
+    object.httpMetadata?.contentType || "application/octet-stream"
+  );
   headers.set("Cache-Control", "public, max-age=31536000"); // Cache for 1 year
 
   return new Response(object.body, { headers });
 });
 
+// Receipt extraction endpoints
+router.post("/api/extract", (request: IRequest, env: WorkerEnv) =>
+  handleExtractReceiptDirect(request, env)
+);
+router.post(
+  "/api/receipts/:receiptId/extract",
+  (request: IRequest, env: WorkerEnv) => handleExtractReceipt(request, env)
+);
+
+// Catch-all 404
 router.all("*", () => new Response("Not Found", { status: 404 }));
 
 const handler: ExportedHandler<WorkerEnv, QueueMessage> = {
