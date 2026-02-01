@@ -65,3 +65,18 @@ export function daysUntilDate(targetDate: Date): number {
 export function sanitizeOrgName(inputString: string): string {
   return inputString.toLocaleLowerCase().replace(orgNameNotCharacterRegex, "");
 }
+
+/**
+ * Parse query parameters from a request into a typed object
+ */
+export function parseQueryParams<T>(
+  req: Request,
+  schema: { parse: (data: unknown) => T }
+): T {
+  const url = new URL(req.url);
+  const params: Record<string, string> = {};
+  url.searchParams.forEach((value, key) => {
+    params[key] = value;
+  });
+  return schema.parse(params);
+}

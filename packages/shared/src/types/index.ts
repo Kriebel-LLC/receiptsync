@@ -24,6 +24,12 @@ export interface Env {
   AWS_ACCESS_KEY_ID: string;
   AWS_SECRET_ACCESS_KEY: string;
   NEXT_PUBLIC_ENVIRONMENT: Environment;
+  // Notion OAuth
+  NOTION_CLIENT_SECRET: string;
+  NEXT_PUBLIC_NOTION_CLIENT_ID: string;
+  NEXT_PUBLIC_NOTION_OAUTH_URL: string;
+  // Encryption key for storing OAuth tokens
+  ENCRYPTION_SECRET_KEY: string;
 }
 
 export interface DBEnv {
@@ -41,3 +47,4 @@ export type UserDetail = {
 export * from "./destination-type";
 export * from "./destination";
 export * from "./receipt";
+export * from "./connection";
