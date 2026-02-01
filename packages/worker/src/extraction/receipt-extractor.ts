@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { Mistral } from "@mistralai/mistralai";
 import {
   ReceiptExtractionResult,
   ReceiptExtractionResultSchema,
@@ -36,48 +36,22 @@ export interface ExtractionResponse {
 // Constants
 // ============================================================================
 
-const EXTRACTION_MODEL = "claude-sonnet-4-20250514";
+const EXTRACTION_MODEL = "mistral-ocr-latest";
 const EXTRACTION_VERSION = "1.0.0";
 
 /**
- * System prompt for receipt extraction
+ * Document annotation prompt for structured receipt extraction
+ * Using Mistral OCR's document_annotation feature for structured JSON output
  */
-const SYSTEM_PROMPT = `You are an expert receipt OCR and data extraction system. Your task is to analyze receipt images and extract structured data with high accuracy.
-
-Guidelines:
-1. Extract all visible information from the receipt
-2. For amounts, always use decimal numbers (e.g., 12.99 not "12.99" or "$12.99")
-3. For dates, use ISO 8601 format (YYYY-MM-DD)
-4. For currency, use ISO 4217 3-letter codes (USD, EUR, GBP, etc.)
-5. If a field is not visible or unclear, set it to null
-6. Provide confidence scores (0.0 to 1.0) for key fields based on readability
-7. Handle faded, partial, or non-English receipts by extracting what's visible
-8. Detect the receipt category based on merchant type and items
-
-Categories to choose from:
-- FOOD: Restaurants, groceries, cafes, food delivery
-- TRAVEL: Airlines, hotels, car rentals, gas stations, rideshare
-- OFFICE: Office supplies, printing, shipping
-- SOFTWARE: Software subscriptions, digital services, SaaS
-- UTILITIES: Phone, internet, electricity, water
-- ENTERTAINMENT: Movies, concerts, streaming services, games
-- HEALTHCARE: Pharmacy, medical services, health products
-- SHOPPING: General retail, clothing, electronics
-- SERVICES: Professional services, repairs, maintenance
-- OTHER: Anything that doesn't fit above categories`;
-
-/**
- * User prompt for receipt extraction
- */
-const USER_PROMPT = `Please analyze this receipt image and extract the following information into a JSON object:
+const EXTRACTION_PROMPT = `Extract all receipt information into a structured JSON object with the following fields:
 
 {
-  "rawText": "optional raw OCR text if helpful",
+  "rawText": "The full raw OCR text from the receipt",
   "vendor": "merchant/store name or null",
   "vendorAddress": "full address if visible or null",
   "vendorPhone": "phone number if visible or null",
   "amount": total amount as number or null,
-  "currency": "3-letter ISO currency code or null",
+  "currency": "3-letter ISO currency code (USD, EUR, GBP, etc.) or null",
   "subtotal": subtotal before tax as number or null,
   "taxAmount": tax amount as number or null,
   "tipAmount": tip amount as number or null,
@@ -97,9 +71,8 @@ const USER_PROMPT = `Please analyze this receipt image and extract the following
     }
   ],
   "category": "one of: FOOD, TRAVEL, OFFICE, SOFTWARE, UTILITIES, ENTERTAINMENT, HEALTHCARE, SHOPPING, SERVICES, OTHER",
-  "categoryConfidence": confidence score 0.0-1.0 for category,
   "fieldConfidences": {
-    "vendor": confidence 0.0-1.0,
+    "vendor": confidence 0.0-1.0 based on OCR clarity,
     "amount": confidence 0.0-1.0,
     "date": confidence 0.0-1.0,
     "currency": confidence 0.0-1.0,
@@ -107,27 +80,40 @@ const USER_PROMPT = `Please analyze this receipt image and extract the following
   }
 }
 
+Category guidelines:
+- FOOD: Restaurants, groceries, cafes, food delivery
+- TRAVEL: Airlines, hotels, car rentals, gas stations, rideshare
+- OFFICE: Office supplies, printing, shipping
+- SOFTWARE: Software subscriptions, digital services, SaaS
+- UTILITIES: Phone, internet, electricity, water
+- ENTERTAINMENT: Movies, concerts, streaming services, games
+- HEALTHCARE: Pharmacy, medical services, health products
+- SHOPPING: General retail, clothing, electronics
+- SERVICES: Professional services, repairs, maintenance
+- OTHER: Anything that doesn't fit above categories
+
 Important:
-- Return ONLY the JSON object, no additional text
-- Use null for any field that cannot be determined
-- Confidence scores should reflect readability and certainty
-- If the image is not a receipt, still try to extract any visible information`;
+- For amounts, use decimal numbers (e.g., 12.99 not "$12.99")
+- For dates, use ISO 8601 format (YYYY-MM-DD)
+- Set fields to null if not visible or unclear
+- Handle faded, partial, or non-English receipts by extracting what's visible`;
 
 // ============================================================================
 // Receipt Extractor Class
 // ============================================================================
 
 export class ReceiptExtractor {
-  private client: Anthropic;
+  private client: Mistral;
 
   constructor(apiKey: string) {
-    this.client = new Anthropic({
+    this.client = new Mistral({
       apiKey,
     });
   }
 
   /**
-   * Extract data from a receipt image
+   * Extract data from a receipt image using Mistral OCR
+   * Mistral OCR is optimized for document understanding at ~$1/1000 pages
    */
   async extract(input: ExtractionInput): Promise<ExtractionResponse> {
     const startTime = Date.now();
@@ -142,48 +128,53 @@ export class ReceiptExtractor {
         };
       }
 
-      // Build the image content for Claude
-      const imageContent = this.buildImageContent(input);
+      // Build the document source for Mistral OCR
+      const document = this.buildDocumentSource(input);
 
-      // Call Claude Vision API
-      const response = await this.client.messages.create({
+      // Call Mistral OCR API with structured extraction
+      const response = await this.client.ocr.process({
         model: EXTRACTION_MODEL,
-        max_tokens: 4096,
-        system: SYSTEM_PROMPT,
-        messages: [
-          {
-            role: "user",
-            content: [
-              imageContent,
-              {
-                type: "text",
-                text: USER_PROMPT,
-              },
-            ],
-          },
-        ],
+        document,
+        // Use document annotation for structured JSON output
+        documentAnnotationFormat: { type: "json_object" },
+        documentAnnotationPrompt: EXTRACTION_PROMPT,
       });
 
-      // Extract the text response
-      const textContent = response.content.find(
-        (block) => block.type === "text"
-      );
-      if (!textContent || textContent.type !== "text") {
+      // Extract markdown content from pages
+      const rawText = response.pages
+        ?.map((page) => page.markdown || "")
+        .join("\n\n");
+
+      // Parse the structured annotation response
+      // The annotation is returned separately from the OCR text
+      let extractedData: ReceiptExtractionResult | null = null;
+
+      // Check if we got structured annotation back
+      // Mistral returns the annotation in the response
+      const annotationText =
+        (response as unknown as { annotation?: string }).annotation ||
+        this.extractJsonFromPages(response.pages);
+
+      if (annotationText) {
+        extractedData = this.parseResponse(annotationText);
+      }
+
+      // If structured extraction failed, try to parse from raw OCR text
+      if (!extractedData && rawText) {
+        extractedData = this.parseFromRawText(rawText);
+      }
+
+      if (!extractedData) {
         return {
           success: false,
-          error: "No text response from Claude",
+          error: "Failed to extract structured data from receipt",
           processingTimeMs: Date.now() - startTime,
         };
       }
 
-      // Parse the JSON response
-      const extractedData = this.parseResponse(textContent.text);
-      if (!extractedData) {
-        return {
-          success: false,
-          error: "Failed to parse extraction response as JSON",
-          processingTimeMs: Date.now() - startTime,
-        };
+      // Add raw text if not already present
+      if (!extractedData.rawText && rawText) {
+        extractedData.rawText = rawText;
       }
 
       // Add extraction metadata
@@ -221,29 +212,27 @@ export class ReceiptExtractor {
   }
 
   /**
-   * Build the image content block for the Claude API
+   * Build the document source for Mistral OCR API
    */
-  private buildImageContent(
+  private buildDocumentSource(
     input: ExtractionInput
-  ): Anthropic.Messages.ImageBlockParam {
+  ):
+    | { type: "image_url"; imageUrl: string }
+    | { type: "document_url"; documentUrl: string } {
     if (input.imageBase64 && input.mediaType) {
+      // Mistral accepts base64 as a data URL
+      const dataUrl = `data:${input.mediaType};base64,${input.imageBase64}`;
       return {
-        type: "image",
-        source: {
-          type: "base64",
-          media_type: input.mediaType,
-          data: input.imageBase64,
-        },
+        type: "image_url",
+        imageUrl: dataUrl,
       };
     }
 
     if (input.imageUrl) {
+      // For image URLs, use image_url type
       return {
-        type: "image",
-        source: {
-          type: "url",
-          url: input.imageUrl,
-        },
+        type: "image_url",
+        imageUrl: input.imageUrl,
       };
     }
 
@@ -252,7 +241,32 @@ export class ReceiptExtractor {
   }
 
   /**
-   * Parse the JSON response from Claude
+   * Try to extract JSON from OCR pages if annotation is not directly available
+   */
+  private extractJsonFromPages(
+    pages?: Array<{ markdown?: string }>
+  ): string | null {
+    if (!pages) return null;
+
+    for (const page of pages) {
+      if (page.markdown) {
+        // Look for JSON in the markdown content
+        const jsonMatch = page.markdown.match(/```json\s*([\s\S]*?)\s*```/);
+        if (jsonMatch) {
+          return jsonMatch[1];
+        }
+        // Also try to find raw JSON object
+        const rawJsonMatch = page.markdown.match(/\{[\s\S]*\}/);
+        if (rawJsonMatch) {
+          return rawJsonMatch[0];
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Parse the JSON response from OCR
    */
   private parseResponse(text: string): ReceiptExtractionResult | null {
     try {
@@ -274,6 +288,150 @@ export class ReceiptExtractor {
       console.error("JSON parse error:", e);
       return null;
     }
+  }
+
+  /**
+   * Attempt to parse structured data from raw OCR text
+   * This is a fallback when structured extraction doesn't work
+   */
+  private parseFromRawText(rawText: string): ReceiptExtractionResult | null {
+    try {
+      // Initialize with required nullable fields
+      const result: ReceiptExtractionResult = {
+        rawText,
+        vendor: null,
+        amount: null,
+        currency: null,
+        date: null,
+        fieldConfidences: {
+          vendor: 0.5,
+          amount: 0.5,
+          date: 0.5,
+          currency: 0.5,
+          category: 0.3,
+        },
+      };
+
+      // Extract vendor (usually at the top, often in larger text)
+      const lines = rawText.split("\n").filter((l) => l.trim());
+      if (lines.length > 0) {
+        // First non-empty line is often the vendor name
+        result.vendor = lines[0].trim();
+        result.fieldConfidences!.vendor = 0.6;
+      }
+
+      // Extract total amount (look for "total", "amount due", etc.)
+      const totalMatch = rawText.match(
+        /(?:total|amount\s*due|grand\s*total|balance\s*due)[:\s]*\$?\s*([\d,]+\.?\d*)/i
+      );
+      if (totalMatch) {
+        result.amount = parseFloat(totalMatch[1].replace(/,/g, ""));
+        result.fieldConfidences!.amount = 0.7;
+      }
+
+      // Extract date (various formats)
+      const dateMatch = rawText.match(
+        /(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})|(\d{4}[-/]\d{1,2}[-/]\d{1,2})/
+      );
+      if (dateMatch) {
+        const dateStr = dateMatch[0];
+        const parsedDate = new Date(dateStr);
+        if (!isNaN(parsedDate.getTime())) {
+          result.date = parsedDate.toISOString().split("T")[0];
+          result.fieldConfidences!.date = 0.6;
+        }
+      }
+
+      // Default to USD if we found an amount with $
+      if (rawText.includes("$")) {
+        result.currency = "USD";
+        result.fieldConfidences!.currency = 0.7;
+      }
+
+      // Try to detect category from common keywords
+      result.category = this.detectCategoryFromText(rawText);
+
+      return result;
+    } catch (e) {
+      console.error("Failed to parse from raw text:", e);
+      return null;
+    }
+  }
+
+  /**
+   * Detect receipt category from text content
+   */
+  private detectCategoryFromText(text: string): string {
+    const lowerText = text.toLowerCase();
+
+    // Food/Restaurant keywords
+    if (
+      /restaurant|cafe|coffee|pizza|burger|food|grocery|supermarket|deli|bakery/i.test(
+        lowerText
+      )
+    ) {
+      return ReceiptCategory.Food;
+    }
+
+    // Travel keywords
+    if (
+      /airline|flight|hotel|motel|car rental|gas station|uber|lyft|taxi|parking/i.test(
+        lowerText
+      )
+    ) {
+      return ReceiptCategory.Travel;
+    }
+
+    // Office keywords
+    if (
+      /office|staples|fedex|ups|usps|shipping|printing|copy/i.test(lowerText)
+    ) {
+      return ReceiptCategory.Office;
+    }
+
+    // Software keywords
+    if (
+      /software|subscription|saas|cloud|digital|app store|google play/i.test(
+        lowerText
+      )
+    ) {
+      return ReceiptCategory.Software;
+    }
+
+    // Utilities keywords
+    if (
+      /electric|water|gas|internet|phone|mobile|utility|bill/i.test(lowerText)
+    ) {
+      return ReceiptCategory.Utilities;
+    }
+
+    // Entertainment keywords
+    if (/movie|cinema|theater|concert|netflix|spotify|game/i.test(lowerText)) {
+      return ReceiptCategory.Entertainment;
+    }
+
+    // Healthcare keywords
+    if (
+      /pharmacy|cvs|walgreens|medical|doctor|hospital|health/i.test(lowerText)
+    ) {
+      return ReceiptCategory.Healthcare;
+    }
+
+    // Shopping keywords
+    if (
+      /walmart|target|amazon|retail|store|shop|mall|clothing|electronics/i.test(
+        lowerText
+      )
+    ) {
+      return ReceiptCategory.Shopping;
+    }
+
+    // Services keywords
+    if (/repair|service|maintenance|cleaning|salon|barber/i.test(lowerText)) {
+      return ReceiptCategory.Services;
+    }
+
+    return ReceiptCategory.Other;
   }
 
   /**

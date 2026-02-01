@@ -148,8 +148,8 @@ export async function handleExtractReceiptDirect(
       extractionInput.mediaType = mediaType;
     }
 
-    // Perform extraction
-    const extractor = new ReceiptExtractor(env.ANTHROPIC_API_KEY);
+    // Perform extraction using Mistral OCR
+    const extractor = new ReceiptExtractor(env.MISTRAL_API_KEY);
     const extractionResponse = await extractor.extract(extractionInput);
 
     if (!extractionResponse.success || !extractionResponse.data) {
@@ -326,8 +326,8 @@ export async function handleExtractReceipt(
         });
       }
 
-      // Perform extraction
-      const extractor = new ReceiptExtractor(env.ANTHROPIC_API_KEY);
+      // Perform extraction using Mistral OCR
+      const extractor = new ReceiptExtractor(env.MISTRAL_API_KEY);
       const extractionResponse = await extractor.extract({
         imageUrl: receipt.originalImageUrl,
       });
