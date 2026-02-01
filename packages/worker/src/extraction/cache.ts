@@ -40,7 +40,7 @@ export async function calculateBase64Hash(base64Data: string): Promise<string> {
  * Calculate hash from image URL by fetching the content
  */
 export async function calculateUrlHash(imageUrl: string): Promise<string> {
-  const response = await fetch(imageUrl);
+  const response = (await fetch(imageUrl)) as globalThis.Response;
   if (!response.ok) {
     throw new Error(`Failed to fetch image: ${response.status}`);
   }
