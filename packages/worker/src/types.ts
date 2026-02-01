@@ -3,4 +3,5 @@ import type { QueueMessage } from "./queue";
 
 export interface WorkerEnv extends Env, DBEnv {
   QUEUE: Queue<QueueMessage>;
+  RECEIPTS_BUCKET: R2Bucket;
 }

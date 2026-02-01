@@ -473,3 +473,48 @@ export type Destination = InferSelectModel<typeof destinations>;
 export type InsertDestination = InferInsertModel<typeof destinations>;
 export type SyncedReceipt = InferSelectModel<typeof syncedReceipts>;
 export type InsertSyncedReceipt = InferInsertModel<typeof syncedReceipts>;
+
+// ============================================================================
+// Email Forwarding Tables
+// ============================================================================
+
+/**
+ * Unique email addresses for receipt forwarding per organization
+ * Each org gets a unique forwarding address like: abc123@receipts.receiptsync.com
+ */
+export const emailForwardingAddresses = sqliteTable(
+  "email_forwarding_addresses",
+  {
+    id: text("id", { length: 191 }).primaryKey().notNull(),
+    orgId: text("org_id", { length: 191 }).notNull(),
+    // Unique identifier used in the email address (e.g., "abc123" in abc123@receipts.receiptsync.com)
+    addressCode: text("address_code", { length: 32 }).notNull(),
+    // Whether this forwarding address is active
+    isActive: integer("is_active", { mode: "boolean" }).default(true).notNull(),
+    // Optional description/label for the forwarding address
+    label: text("label", { length: 191 }),
+    // Timestamps
+    createdAt: integer("created_at", {
+      mode: "timestamp",
+    })
+      .default(sql`(unixepoch())`)
+      .notNull(),
+    updatedAt: integer("updated_at", {
+      mode: "timestamp",
+    })
+      .default(sql`(unixepoch())`)
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => {
+    return {
+      orgIdIndex: index("email_forwarding_addresses_org_id_idx").on(table.orgId),
+      addressCodeIndex: uniqueIndex("email_forwarding_addresses_code_idx").on(
+        table.addressCode
+      ),
+    };
+  }
+);
+
+export type EmailForwardingAddress = InferSelectModel<typeof emailForwardingAddresses>;
+export type InsertEmailForwardingAddress = InferInsertModel<typeof emailForwardingAddresses>;
