@@ -6,4 +6,8 @@ export interface WorkerEnv extends Env, DBEnv {
   RECEIPTS_BUCKET: R2Bucket;
   // Mistral API key for OCR receipt extraction
   MISTRAL_API_KEY: string;
+  // Google OAuth (same as web env)
+  NEXT_PUBLIC_GOOGLE_CLIENT_ID: string;
+  GOOGLE_CLIENT_SECRET: string;
+  ENCRYPTION_SECRET_KEY: string;
 }

@@ -1,17 +1,20 @@
 import { WorkerEnv } from "@/src/types";
 import { assertNever } from "shared/src/utils";
 import { handleProcessReceiptMessage } from "./handlers/process-receipt";
+import { syncReceiptToAllDestinations, retryPendingReceipts, ReceiptUpdateType } from "../syncs/sheets-sync";
 
 export enum QueueMessageType {
   Default = "DEFAULT",
   ProcessReceipt = "PROCESS_RECEIPT",
   SyncReceipt = "SYNC_RECEIPT",
+  RetryDestination = "RETRY_DESTINATION",
 }
 
 export type QueueMessage =
   | DefaultQueueMessage
   | ProcessReceiptQueueMessage
-  | SyncReceiptQueueMessage;
+  | SyncReceiptQueueMessage
+  | RetryDestinationMessage;
 
 export type DefaultQueueMessage = {
   type: typeof QueueMessageType.Default;
@@ -29,12 +32,20 @@ export type ProcessReceiptQueueMessage = {
 };
 
 /**
- * Message to sync a receipt to destinations
+ * Message to sync a receipt to all active destinations
  */
 export type SyncReceiptQueueMessage = {
   type: QueueMessageType.SyncReceipt;
   receiptId: string;
-  destinationIds?: string[]; // If empty, sync to all active destinations
+  updateType?: ReceiptUpdateType;
+};
+
+/**
+ * Message to retry all pending receipts for a destination
+ */
+export type RetryDestinationMessage = {
+  type: QueueMessageType.RetryDestination;
+  destinationId: string;
 };
 
 export async function handleQueueMessage(
@@ -50,13 +61,28 @@ export async function handleQueueMessage(
     switch (messageType) {
       case QueueMessageType.Default:
         return;
+
       case QueueMessageType.ProcessReceipt:
         await handleProcessReceiptMessage(env, body);
         return;
-      case QueueMessageType.SyncReceipt:
-        // TODO: Implement sync receipt handler
-        console.log(`Sync receipt ${body.receiptId} to destinations`);
+
+      case QueueMessageType.SyncReceipt: {
+        const { receiptId, updateType } = body;
+        await syncReceiptToAllDestinations(
+          env,
+          receiptId,
+          updateType ?? ReceiptUpdateType.Add
+        );
         return;
+      }
+
+      case QueueMessageType.RetryDestination: {
+        const { destinationId } = body;
+        const result = await retryPendingReceipts(env, destinationId);
+        console.log(`Retry result for destination ${destinationId}:`, result);
+        return;
+      }
+
       default:
         assertNever(messageType);
     }
