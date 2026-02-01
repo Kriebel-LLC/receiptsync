@@ -1,4 +1,4 @@
-import { proPlan } from "@/config/subscriptions";
+import { proPlan, businessPlan, getPlanByPriceId } from "@/config/subscriptions";
 import { EventNames, track } from "@/lib/amplitude";
 import { getOrgUserForOrgName } from "@/lib/org";
 import { routeHandler } from "@/lib/route";
@@ -7,6 +7,7 @@ import { absoluteUrl } from "@/lib/utils";
 import { NextResponse } from "next/server";
 import { Plan } from "shared/src/types/plan";
 import { Role, hasPermission } from "shared/src/types/role";
+import { z } from "zod";
 
 export const config = {
   unstable_allowDynamic: [
@@ -16,27 +17,36 @@ export const config = {
   ],
 };
 
+const checkoutQuerySchema = z.object({
+  name: z.string().min(1),
+  plan: z.enum(["pro", "business"]).optional(),
+});
+
 const handler = routeHandler(async (req, user) => {
   if (req.method !== "GET") {
     return new NextResponse(null, { status: 405 });
   }
 
   const url = new URL(req.url);
-  const orgName = url.searchParams.get("name");
-  if (!orgName) {
-    return new NextResponse(null, { status: 400 });
+  const parseResult = checkoutQuerySchema.safeParse({
+    name: url.searchParams.get("name"),
+    plan: url.searchParams.get("plan") || undefined,
+  });
+
+  if (!parseResult.success) {
+    return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
   }
+
+  const { name: orgName, plan: requestedPlan } = parseResult.data;
 
   const userInOrg = await getOrgUserForOrgName(user.uid, orgName);
   if (!userInOrg || !hasPermission(userInOrg.role, Role.READ)) {
-    // TODO: allow readers to purchase?
     return new NextResponse("Unauthorized", { status: 403 });
   }
 
   const billingUrl = absoluteUrl(`/${orgName}/billing`);
 
-  // The user is on the pro plan.
-  // Create a portal session to manage subscription.
+  // If already subscribed, redirect to billing portal
   if (userInOrg.orgPlan !== Plan.FREE && userInOrg.orgStripeCustomerId) {
     const stripeSession = await stripe.billingPortal.sessions.create({
       customer: userInOrg.orgStripeCustomerId,
@@ -51,8 +61,8 @@ const handler = routeHandler(async (req, user) => {
     return NextResponse.json({ url: stripeSession.url });
   }
 
-  // The user is on the free plan.
-  // Create a checkout session to upgrade.
+  // Determine which plan to checkout for
+  const selectedPlan = requestedPlan === "business" ? businessPlan : proPlan;
 
   // Stripe errors when both customer & customer_email are set, so prefer Id when set
   const customerDetails = userInOrg.orgStripeCustomerId
@@ -67,7 +77,7 @@ const handler = routeHandler(async (req, user) => {
     ...customerDetails,
     line_items: [
       {
-        price: proPlan.stripePriceId,
+        price: selectedPlan.stripePriceId,
         quantity: 1,
       },
     ],
@@ -83,7 +93,8 @@ const handler = routeHandler(async (req, user) => {
 
   track(EventNames.ORG_CHECKOUT_STARTED, user.uid, {
     "org id": userInOrg.orgId,
-    "price id": proPlan.stripePriceId,
+    "price id": selectedPlan.stripePriceId,
+    plan: requestedPlan || "pro",
   });
 
   return NextResponse.json({ url: stripeSession.url });

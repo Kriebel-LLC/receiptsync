@@ -1,24 +1,14 @@
 import { notFound, redirect } from "next/navigation";
 
-import { planToSubscriptionPlan } from "@/config/subscriptions";
 import { DashboardHeader } from "@/custom-components/header";
 import { OrgBillingForm } from "@/custom-components/org-billing-form";
 import { DashboardShell } from "@/custom-components/shell";
 import { getOrgUserForOrgName } from "@/lib/org";
 import { getCurrentServerUser } from "@/lib/session";
+import { getOrgSubscriptionPlan } from "@/lib/subscription";
 import { cookies } from "next/headers";
+import { Plan } from "shared/src/types/plan";
 import { Role, hasPermission } from "shared/src/types/role";
-
-// Cant do this in app dir:
-
-// export const config = {
-//   runtime: "edge",
-//   unstable_allowDynamic: [
-//     // Stripe imports this, but does not use it, so tell build to ignore
-//     // use a glob to allow anything in the function-bind 3rd party module
-//     "**/node_modules/function-bind/**",
-//   ],
-// };
 
 export const metadata = {
   title: "Billing",
@@ -40,7 +30,7 @@ export default async function BillingPage({
     notFound();
   }
 
-  const subscriptionPlan = planToSubscriptionPlan(userInOrg.orgPlan);
+  const subscriptionPlan = await getOrgSubscriptionPlan(userInOrg.orgId);
 
   return (
     <DashboardShell>
@@ -51,7 +41,7 @@ export default async function BillingPage({
       <div className="grid gap-8">
         <OrgBillingForm
           orgName={params.name}
-          orgPlan={userInOrg.orgPlan}
+          orgPlan={userInOrg.orgPlan as Plan}
           subscriptionPlan={subscriptionPlan}
         />
       </div>
