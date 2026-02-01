@@ -87,7 +87,7 @@ export function ReceiptExport({ orgName }: ReceiptExportProps) {
         if (!response.ok) {
           throw new Error("Failed to load export information");
         }
-        const data = await response.json();
+        const data = (await response.json()) as ExportInfo;
         setExportInfo(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unknown error");
@@ -145,7 +145,7 @@ export function ReceiptExport({ orgName }: ReceiptExportProps) {
 
       // Check if this is an async job response
       if (response.status === 202) {
-        const data = await response.json();
+        const data = (await response.json()) as { receiptCount: number };
         setSuccess(
           `Export job created! ${data.receiptCount} receipts will be processed. You'll receive a notification when it's ready.`
         );
@@ -153,7 +153,7 @@ export function ReceiptExport({ orgName }: ReceiptExportProps) {
       }
 
       if (!response.ok) {
-        const data = await response.json();
+        const data = (await response.json()) as { error?: string };
         throw new Error(data.error || "Export failed");
       }
 
