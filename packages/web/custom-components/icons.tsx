@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   ArrowRight,
+  Camera,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -15,12 +16,15 @@ import {
   LucideProps,
   Moon,
   MoreVertical,
+  Pencil,
   Pizza,
   Plus,
+  Receipt,
   Settings,
   SunMedium,
   Trash,
   Twitter,
+  Upload,
   User,
   X,
   type Icon as LucideIcon,
@@ -50,6 +54,10 @@ export const Icons = {
   sun: SunMedium,
   moon: Moon,
   laptop: Laptop,
+  camera: Camera,
+  upload: Upload,
+  receipt: Receipt,
+  pencil: Pencil,
   google: ({ ...props }: LucideProps) => (
     <svg viewBox="0 0 18 18" {...props}>
       <path

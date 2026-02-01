@@ -21,6 +21,9 @@ export const env = createEnv({
     NEXT_PUBLIC_AXIOM_TOKEN: z.string().min(1),
     AWS_ACCESS_KEY_ID: z.string().min(1),
     AWS_SECRET_ACCESS_KEY: z.string().min(1),
+    R2_ACCOUNT_ID: z.string().min(1),
+    R2_BUCKET_NAME: z.string().min(1),
+    R2_PUBLIC_URL: z.string().url().optional(),
     NEXT_PUBLIC_ENVIRONMENT: z.nativeEnum(Environment),
   },
   client: {
@@ -60,6 +63,9 @@ export const env = createEnv({
     SMTP_FROM: process.env.SMTP_FROM,
     AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
     AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
+    R2_ACCOUNT_ID: process.env.R2_ACCOUNT_ID,
+    R2_BUCKET_NAME: process.env.R2_BUCKET_NAME,
+    R2_PUBLIC_URL: process.env.R2_PUBLIC_URL,
     NEXT_PUBLIC_ENVIRONMENT: process.env.NEXT_PUBLIC_ENVIRONMENT,
   },
 });
