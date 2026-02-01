@@ -20,6 +20,7 @@ import {
   ReceiptExtractionResult,
   ReceiptSourceConfiguration,
 } from "../types/receipt";
+import { ConnectionMetadata, ConnectionError } from "../types/connection";
 
 export const users = sqliteTable(
   "users",
@@ -159,6 +160,74 @@ export const orgUsers = sqliteTable("org_users", {
 // ============================================================================
 // ReceiptSync Tables
 // ============================================================================
+
+/**
+ * Connection types - OAuth connections to external services
+ */
+export enum ConnectionType {
+  Notion = "NOTION",
+  Google = "GOOGLE",
+}
+
+/**
+ * Connection status
+ */
+export enum ConnectionStatus {
+  Active = "ACTIVE",
+  Warning = "WARNING", // Connection has issues but may still work
+  Disabled = "DISABLED", // Connection is disabled (user action needed)
+  Archived = "ARCHIVED",
+}
+
+/**
+ * Connections - OAuth connections to external services (Notion, Google, etc.)
+ */
+export const connections = sqliteTable(
+  "connections",
+  {
+    id: text("id", { length: 191 }).primaryKey().notNull(),
+    orgId: text("org_id", { length: 191 }).notNull(),
+    type: text("type", {
+      enum: [ConnectionType.Notion, ConnectionType.Google],
+    })
+      .notNull()
+      .$type<ConnectionType>(),
+    // Encrypted access token
+    accessToken: text("access_token", { length: 512 }).notNull(),
+    status: text("status", {
+      enum: [
+        ConnectionStatus.Active,
+        ConnectionStatus.Warning,
+        ConnectionStatus.Disabled,
+        ConnectionStatus.Archived,
+      ],
+    })
+      .default(ConnectionStatus.Active)
+      .notNull()
+      .$type<ConnectionStatus>(),
+    // Type-specific metadata (workspace name, bot ID, etc.)
+    metadata: text("metadata", { mode: "json" }).$type<ConnectionMetadata>(),
+    // Error details if connection has issues
+    error: text("error", { mode: "json" }).$type<ConnectionError>(),
+    createdAt: integer("created_at", {
+      mode: "timestamp",
+    })
+      .default(sql`(unixepoch())`)
+      .notNull(),
+    updatedAt: integer("updated_at", {
+      mode: "timestamp",
+    })
+      .default(sql`(unixepoch())`)
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => {
+    return {
+      orgIdIndex: index("connections_org_id_idx").on(table.orgId),
+      typeIndex: index("connections_type_idx").on(table.type),
+    };
+  }
+);
 
 /**
  * Receipt source types - where receipts can be ingested from
@@ -484,6 +553,8 @@ export type OrgUser = InferSelectModel<typeof orgUsers>;
 export type OrgUserWithDetail = OrgUser & UserDetail;
 
 // ReceiptSync types
+export type Connection = InferSelectModel<typeof connections>;
+export type InsertConnection = InferInsertModel<typeof connections>;
 export type ReceiptSource = InferSelectModel<typeof receiptSources>;
 export type InsertReceiptSource = InferInsertModel<typeof receiptSources>;
 export type Receipt = InferSelectModel<typeof receipts>;

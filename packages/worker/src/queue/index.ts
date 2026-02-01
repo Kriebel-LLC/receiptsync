@@ -1,6 +1,7 @@
 import { WorkerEnv } from "@/src/types";
 import { assertNever } from "shared/src/utils";
 import { handleProcessReceiptMessage } from "./handlers/process-receipt";
+import { handleSyncReceiptMessage } from "./sync-receipt";
 
 export enum QueueMessageType {
   Default = "DEFAULT",
@@ -54,8 +55,7 @@ export async function handleQueueMessage(
         await handleProcessReceiptMessage(env, body);
         return;
       case QueueMessageType.SyncReceipt:
-        // TODO: Implement sync receipt handler
-        console.log(`Sync receipt ${body.receiptId} to destinations`);
+        await handleSyncReceiptMessage(env, body);
         return;
       default:
         assertNever(messageType);
